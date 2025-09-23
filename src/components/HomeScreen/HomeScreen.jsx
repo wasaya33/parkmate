@@ -1,11 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-const HomeScreen = ({ onNavigateToWelcome }) => {
+// Fix for default markers in react-leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+const HomeScreen = ({ onNavigateToWelcome, addToFavorites }) => {
   const [activeView, setActiveView] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPark, setSelectedPark] = useState(null);
+  const [addedToFavorites, setAddedToFavorites] = useState(new Set());
+  const [mapCenter, setMapCenter] = useState([40.7829, -73.9654]); // Default to Central Park coordinates
 
-  // Sample park data
+  // Sample park data with coordinates
   const parks = [
     {
       id: 1,
@@ -14,7 +27,8 @@ const HomeScreen = ({ onNavigateToWelcome }) => {
       amenities: ["Walking Trails", "Boating", "Playgrounds", "Sports Fields", "Picnic Areas"],
       address: "Central Park West, New York, NY 10024",
       rating: 4.8,
-      imageUrl: "https://source.unsplash.com/800x600/?park,central"
+      imageUrl: "https://source.unsplash.com/800x600/?park,central",
+      coordinates: [40.7829, -73.9654]
     },
     {
       id: 2,
@@ -23,19 +37,64 @@ const HomeScreen = ({ onNavigateToWelcome }) => {
       amenities: ["Botanical Gardens", "Museums", "Lakes", "Tea Garden", "Cycling Paths"],
       address: "501 Stanyan St, San Francisco, CA 94117",
       rating: 4.7,
-      imageUrl: "https://source.unsplash.com/800x600/?park,golden-gate"
+      imageUrl: "https://source.unsplash.com/800x600/?park,golden-gate",
+      coordinates: [37.7694, -122.4862]
     },
     {
       id: 3,
-      name: "Millennium Park",
-      description: "Modern urban park known for its unique architecture and public art installations. Features outdoor concerts and events throughout the year.",
-      amenities: ["Art Installations", "Concert Venue", "Ice Rink", "Gardens", "Fountains"],
-      address: "201 E Randolph St, Chicago, IL 60602",
+      name: "Griffith Park",
+      description: "Large urban park with hiking trails, observatory, and panoramic city views. A popular destination for outdoor activities and sightseeing.",
+      amenities: ["Hiking Trails", "Observatory", "Zoo", "Golf Course", "Museum"],
+      address: "4730 Crystal Springs Dr, Los Angeles, CA 90027",
       rating: 4.6,
-      imageUrl: "https://source.unsplash.com/800x600/?park,millennium"
+      imageUrl: "https://source.unsplash.com/800x600/?park,los-angeles",
+      coordinates: [34.1367, -118.2942]
     },
-    
+    {
+      id: 4,
+      name: "Lincoln Park",
+      description: "Beautiful lakeside park with gardens, conservatory, and recreational facilities. Offers stunning views of the Chicago skyline.",
+      amenities: ["Conservatory", "Gardens", "Zoo", "Beaches", "Golf Course"],
+      address: "500-5700 N Lake Shore Dr, Chicago, IL 60614",
+      rating: 4.5,
+      imageUrl: "https://source.unsplash.com/800x600/?park,chicago",
+      coordinates: [41.9217, -87.6356]
+    }
   ];
+
+  // Custom park icon
+  const parkIcon = new L.Icon({
+    iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#16A34A" width="24" height="24">
+        <path d="M19 7.001c0 3.865-3.134 7-7 7s-7-3.135-7-7c0-3.867 3.134-7.001 7-7.001s7 3.134 7 7.001zm-1.598 7.18c-1.506 1.137-3.374 1.82-5.402 1.82-2.03 0-3.899-.685-5.407-1.822-4.072 1.793-6.593 7.376-6.593 9.821h24c0-2.423-2.6-8.006-6.598-9.819z"/>
+      </svg>
+    `),
+    iconSize: [30, 30],
+    iconAnchor: [15, 30],
+    popupAnchor: [0, -30]
+  });
+
+  const handleAddToFavorites = (park) => {
+    if (!addToFavorites) {
+      console.error('addToFavorites prop is not provided');
+      return;
+    }
+    addToFavorites(park);
+    setAddedToFavorites(prev => new Set([...prev, park.id]));
+    alert('Added to favorites!');
+    setSelectedPark(null);
+  };
+
+  const handleParkClickFromMap = (park) => {
+    setSelectedPark(park);
+    setMapCenter(park.coordinates);
+  };
+
+  // Filter parks based on search query
+  const filteredParks = parks.filter(park =>
+    park.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    park.address.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-white">
@@ -87,17 +146,57 @@ const HomeScreen = ({ onNavigateToWelcome }) => {
       <div className="p-4">
         {activeView === 'map' ? (
           // Map View
-          <div className="bg-gray-200 rounded-lg h-96 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-4xl mb-2">🗺️</div>
-              <p className="text-gray-600">Map view will be displayed here</p>
-              <p className="text-sm text-gray-500 mt-2">Interactive map with park locations</p>
-            </div>
+          <div className="rounded-lg h-96 overflow-hidden shadow-md">
+            <MapContainer
+              center={mapCenter}
+              zoom={10}
+              style={{ height: '100%', width: '100%' }}
+              scrollWheelZoom={true}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {filteredParks.map((park) => (
+                <Marker
+                  key={park.id}
+                  position={park.coordinates}
+                  icon={parkIcon}
+                  eventHandlers={{
+                    click: () => handleParkClickFromMap(park),
+                  }}
+                >
+                  <Popup>
+                    <div className="min-w-[200px]">
+                      <h3 className="font-semibold text-lg mb-2">{park.name}</h3>
+                      <img 
+                        src={park.imageUrl} 
+                        alt={park.name}
+                        className="w-full h-20 object-cover rounded mb-2"
+                      />
+                      <p className="text-sm text-gray-600 mb-2">{park.address}</p>
+                      <div className="flex items-center gap-1 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        <span className="text-sm font-medium">{park.rating}</span>
+                      </div>
+                      <button
+                        onClick={() => handleParkClickFromMap(park)}
+                        className="w-full bg-[#16A34A] text-white py-1 px-3 rounded text-sm hover:bg-emerald-600 transition"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
           </div>
         ) : (
           // List View
           <div className="mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {parks.map((park) => (
+            {filteredParks.map((park) => (
               <div 
                 key={park.id} 
                 className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer"
@@ -160,7 +259,7 @@ const HomeScreen = ({ onNavigateToWelcome }) => {
               <img 
                 src={selectedPark.imageUrl} 
                 alt={selectedPark.name}
-                className="w-full h-30 object-cover rounded-t-2xl"
+                className="w-full h-48 object-cover rounded-t-2xl"
               />
               <button
                 onClick={() => setSelectedPark(null)}
@@ -208,11 +307,39 @@ const HomeScreen = ({ onNavigateToWelcome }) => {
               </div>
 
               <div className="flex gap-3">
-                <button className="flex-1 bg-[#16A34A] text-white py-3 rounded-lg font-medium hover:bg-emerald-600 transition">
+                <button 
+                  className="flex-1 bg-[#16A34A] text-white py-3 rounded-lg font-medium hover:bg-emerald-600 transition"
+                  onClick={() => {
+                    const url = `https://www.google.com/maps/dir/?api=1&destination=${selectedPark.coordinates[0]},${selectedPark.coordinates[1]}`;
+                    window.open(url, '_blank');
+                  }}
+                >
                   Get Directions
                 </button>
-                <button className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-300 transition">
-                  Add to Favorites
+                <button 
+                  onClick={() => handleAddToFavorites(selectedPark)}
+                  className={`flex-1 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                    addedToFavorites.has(selectedPark.id)
+                      ? 'bg-[#EBFDF1] text-[#16A34A]'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  disabled={addedToFavorites.has(selectedPark.id)}
+                >
+                  {addedToFavorites.has(selectedPark.id) ? (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Added to Favorites
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                      Add to Favorites
+                    </>
+                  )}
                 </button>
               </div>
             </div>
